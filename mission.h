@@ -3,7 +3,7 @@
 
 #include "map.h"
 #include "config.h"
-#include "dsearch.h"
+#include "LPA.h"
 #include "ilogger.h"
 #include "searchresult.h"
 #include "environmentoptions.h"
@@ -29,7 +29,7 @@ class Mission
         Map                     map;
         Config                  config;
         EnvironmentOptions      options;
-        DLiteSearch*                search;
+        LPA*                search;
         ILogger*                logger;
         const char*             fileName;
         SearchResult            sr;

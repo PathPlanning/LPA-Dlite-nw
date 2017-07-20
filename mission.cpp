@@ -1,5 +1,5 @@
 #include "mission.h"
-#include "dsearch.h"
+#include "LPA.h"
 #include "xmllogger.h"
 #include "gl_const.h"
 
@@ -41,13 +41,47 @@ void Mission::createEnvironmentOptions() {
 }
 
 void Mission::createSearch() {
-    search = new DLiteSearch(config.SearchParams[CN_SP_HW], map.width, map.height, 1);
+    search = new LPA(config.SearchParams[CN_SP_HW], map);
+}
+
+void printPath(const SearchResult &sr, const Map &map) {
+    for (int i = 0; i < map.height; ++i) {
+        for (int j = 0; j < map.width; ++j) {
+            bool is_path = false;
+            for (Node node : *sr.lppath) {
+                if (node.i == i && node.j == j) {
+                    is_path = true;
+                    break;
+                }
+            }
+            if (is_path) {
+                std::cout << '*';
+            } else if (map.CellIsObstacle(i, j)) {
+                std::cout << 1;
+            } else {
+                std::cout << 0;
+            }
+            std::cout << ' ';
+        }
+        std::cout << '\n';
+    }
+    std::cout << '\n';
 }
 
 void Mission::startSearch() {
-    search->setStartPosition({map.start_i, map.start_j});
-    search->changeGoal({map.goal_i, map.goal_j});
-    sr = search->goToGoal(map, options);
+    sr = search->startSearch(options);
+    printPath(sr, search->current_graph);
+    // Obstacle 1
+    for (unsigned j = 1; j <= 10; ++j) {
+        search->pointNewObstacle(3, j, options);
+    }
+    sr = search->startSearch(options);
+    printPath(sr, search->current_graph);
+    for (unsigned i = 1; i <= 6; ++i) {
+        search->pointNewObstacle(i, 5, options);
+    }
+    sr = search->startSearch(options);
+    printPath(sr, search->current_graph);
 }
 
 void Mission::printSearchResultsToConsole() {

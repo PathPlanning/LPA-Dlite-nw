@@ -1,5 +1,9 @@
-#ifndef ISEARCH_H
-#define ISEARCH_H
+//
+// Created by dmitry on 19.07.17.
+//
+
+#ifndef D_LITE_LPA_H
+#define D_LITE_LPA_H
 
 #include "ilogger.h"
 #include "searchresult.h"
@@ -8,17 +12,14 @@
 #include <list>
 #include <unordered_map>
 
-class DLiteSearch {
-public:
-    DLiteSearch();
-
-    DLiteSearch(float heuristic_weigh, unsigned map_width, unsigned map_height, int view_radius);
+class LPA {
+    typedef std::pair<double, double> keytype;
+    typedef std::unordered_map<uint_least64_t, Node> open_cluster_t;
 
 protected:
-    typedef std::pair<double, double> keytype;
-    typedef std::unordered_map<uint_least64_t, Node> open_claster_t;
-
     Node findMin() const;
+
+    LPA::keytype topOpenKey() const;
 
     void deleteMin(const Node &minimum);
 
@@ -29,8 +30,6 @@ protected:
     Node findOpen(const Node &node, uint_fast32_t map_width) const;
 
     void removeOpen(const Node &node, uint_fast32_t map_width);
-
-    void reorderOpen();
 
     double MoveCost(const Node &from, const Node &to) const;
 
@@ -45,47 +44,37 @@ protected:
 
     keytype calculateKey(const Node &node, const Node &target_node, const EnvironmentOptions &options) const;
 
-    void updateVertex(Node &node, const Node &target_node, const EnvironmentOptions &options, uint_fast32_t map_width);
+    void updateVertex(Node node, const Node &target_node, const EnvironmentOptions &options, uint_fast32_t map_width);
 
     double calculateRHS(const Node &node, const Map &map, const EnvironmentOptions &options) const;
 
-    // recomputes shortest path using vertex in open set. Open must contain at least one vertex.
-    void computePath(Node finish_node, const Map &map, const EnvironmentOptions &options);
-
-    // Functions which used by robot to explore new obstacles around him
-    int exploreGraph(const Node &position, const Map &real_map, const EnvironmentOptions &options);
-
-    void pointNewObstacle(unsigned i, unsigned j, const EnvironmentOptions &options, const Node &start_node);
+    Node findParent(const Node &node, const Map &map, const EnvironmentOptions &options) const;
 
 public:
-    void setStartPosition(const Node &start);
+    LPA(float heuristic_weight, const Map &map);
 
-    void changeGoal(Node new_goal);
+    SearchResult startSearch(const EnvironmentOptions &options);
 
-    void makeStep(const EnvironmentOptions &options);
-
-    SearchResult goToGoal(const Map &real_map, const EnvironmentOptions &options);
-
-    std::list<Node> constructFoundPath() const;
-
+    // Functions which used by robot to explore new obstacles around him
+    void pointNewObstacle(unsigned i, unsigned j, const EnvironmentOptions &options);
 
 protected:
+    struct open_node {
+        Node node;
+        bool is_closed;
+        bool is_open;
+    };
+
     SearchResult sresult;
     std::list<Node> lppath, hppath;
     std::unordered_map<uint_least64_t, Node> close;
-    std::vector<open_claster_t> open;
+    std::vector<std::vector<LPA::open_node>> open;
     std::vector<uint_least64_t> cluster_minimums;
     int open_size;
-    uint_least64_t number_of_steps;
     float hweight;
-    double key_modifier;
-    Node prev;
-    bool graph_has_changed;
 public:
-    Map explored_graph;
-    Node position;
-    Node goal;
-    int view_radius;
+    Map current_graph;
 };
 
-#endif
+
+#endif //D_LITE_LPA_H

@@ -8,6 +8,7 @@ struct Node
     unsigned     i, j;
     double  g, rhs;
     std::pair<double, double > key;
+    std::pair<unsigned, unsigned> parent;
 
     bool operator==(const Node &other) const {
         return i == other.i && j == other.j;

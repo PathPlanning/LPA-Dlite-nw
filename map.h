@@ -10,7 +10,7 @@ class Map
     public:
         Map();
         Map(unsigned width, unsigned height, std::pair<unsigned, unsigned> start, std::pair<unsigned, unsigned> goal);
-        Map(const Map& orig);
+        Map(const Map& orig) = default;
 
         bool getMap(const char *FileName);
         bool CellIsTraversable (int i, int j) const;
