@@ -30,8 +30,6 @@ protected:
 
     void removeOpen(const Node &node, uint_fast32_t map_width);
 
-    void reorderOpen();
-
     double MoveCost(const Node &from, const Node &to) const;
 
     double computeHFromCellToCell(const Node &from, const Node &to, const EnvironmentOptions &options) const;
@@ -47,7 +45,7 @@ protected:
 
     void updateVertex(Node &node, const Node &target_node, const EnvironmentOptions &options, uint_fast32_t map_width);
 
-    double calculateRHS(const Node &node, const Map &map, const EnvironmentOptions &options) const;
+    void updateRHS(Node &node, const Map &map, const EnvironmentOptions &options) const;
 
     // recomputes shortest path using vertex in open set. Open must contain at least one vertex.
     void computePath(Node finish_node, const Map &map, const EnvironmentOptions &options);
@@ -70,10 +68,14 @@ public:
 
 
 protected:
+    struct open_node {
+        Node node;
+        bool is_open = false;
+    };
     SearchResult sresult;
     std::list<Node> lppath, hppath;
     std::unordered_map<uint_least64_t, Node> close;
-    std::vector<open_claster_t> open;
+    std::vector<std::vector<open_node>> open;
     std::vector<uint_least64_t> cluster_minimums;
     int open_size;
     uint_least64_t number_of_steps;
