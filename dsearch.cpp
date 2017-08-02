@@ -65,8 +65,10 @@ void DLiteSearch::computePath(Node finish_node, const Map &map, const Environmen
             current_node.g = std::numeric_limits<double>::infinity();
             updateVertex(current_node, finish_node, options, explored_graph.width);
             for (Node node : findSuccessors(current_node, explored_graph, options)) {
-                    updateRHS(node, explored_graph, options);
-                    updateVertex(node, finish_node, options, explored_graph.width);
+                    if (node.rhs > 0) {
+                        updateRHS(node, explored_graph, options);
+                        updateVertex(node, finish_node, options, explored_graph.width);
+                    }
             }
         }
         if (close.find(finish_node.id(explored_graph.width)) != close.end()) {
@@ -85,6 +87,8 @@ SearchResult DLiteSearch::goToGoal(const Map &real_map, const EnvironmentOptions
     updateVertex(goal, position, options, explored_graph.width);
     lppath.push_back(position);
 
+    auto start_time = std::chrono::high_resolution_clock::now();
+    exploreGraph(position, real_map, options);
     computePath(position, explored_graph, options);
     while (position != goal) {
         if (close.find(position.id(explored_graph.width)) == close.end() ||
@@ -96,7 +100,6 @@ SearchResult DLiteSearch::goToGoal(const Map &real_map, const EnvironmentOptions
         position.i = position.parent.first;
         position.j = position.parent.second;
         position = close[position.id(explored_graph.width)];
-        std::cout << "Next position: " << position.i << ' ' << position.j << '\n';
         lppath.push_back(position);
         key_modifier = computeHFromCellToCell(prev, position, options);
         prev = position;
@@ -104,13 +107,24 @@ SearchResult DLiteSearch::goToGoal(const Map &real_map, const EnvironmentOptions
             computePath(position, explored_graph, options);
         }
     }
+    auto finish_time = std::chrono::high_resolution_clock::now();
+    sresult.time = std::chrono::duration_cast<std::chrono::microseconds>(finish_time - start_time).count();
+    sresult.time /= 1000000;
     if (position == goal) {
         sresult.pathfound = true;
+    }
+    sresult.pathlength = 0;
+    for (auto it = lppath.begin(), prev = lppath.begin(); it != lppath.end(); ++it) {
+        if (it != lppath.begin()) {
+            sresult.pathlength += MoveCost(*it, *prev);
+            ++prev;
+        }
     }
     sresult.lppath = &lppath;
     makeSecondaryPath();
     sresult.hppath = &hppath;
     sresult.numberofsteps = number_of_steps;
+    sresult.nodescreated = open_size + close.size();
     return sresult;
 }
 
@@ -260,8 +274,10 @@ void DLiteSearch::pointNewObstacle(unsigned i, unsigned j, const EnvironmentOpti
     close.erase(obstacle.id(explored_graph.width));
     explored_graph.Grid[i][j] = CN_GC_OBS;
     for (Node node : findSuccessors(obstacle, explored_graph, options)) {
-        updateRHS(node, explored_graph, options);
-        updateVertex(node, position, options, explored_graph.width);
+        if (node.rhs > 0) {
+            updateRHS(node, explored_graph, options);
+            updateVertex(node, position, options, explored_graph.width);
+        }
     }
 }
 
@@ -308,6 +324,5 @@ void DLiteSearch::makeStep(const EnvironmentOptions &options) {
             }
         }
     }
-    std::cout << "Next position: " << position.i << ' ' << position.j << '\n';
     lppath.push_back(position);
 }
