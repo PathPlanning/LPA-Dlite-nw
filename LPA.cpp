@@ -121,15 +121,6 @@ Node LPA::findMin() const {
     return minimum;
 }
 
-LPA::keytype LPA::topOpenKey() const {
-    return findMin().key;
-}
-
-void LPA::deleteMin(const Node &minimum) {
-    open[minimum.i][minimum.j].is_open = false;
-    --open_size;
-}
-
 inline int LPA::existsOpen(const Node &node, uint_fast32_t map_width) const {
     return open[node.i][node.j].is_open;
 }
@@ -139,8 +130,10 @@ inline Node LPA::findOpen(const Node &node, uint_fast32_t map_width) const {
 }
 
 void LPA::removeOpen(const Node &node, uint_fast32_t map_width) {
+    if (open[node.i][node.j].is_open) {
+        --open_size;
+    }
     open[node.i][node.j].is_open = false;
-    --open_size;
 }
 
 void LPA::updateVertex(Node node, const Node &target_node, const EnvironmentOptions &options,
@@ -172,22 +165,15 @@ double LPA::calculateRHS(const Node &node, const Map &map, const EnvironmentOpti
 }
 
 void LPA::pointNewObstacle(unsigned i, unsigned j, const EnvironmentOptions &options) {
+    Node obstacle = {i, j};
+    removeOpen(obstacle, current_graph.width);
+    close.erase(obstacle.id(current_graph.width));
     current_graph.Grid[i][j] = CN_GC_OBS;
-    Node obstacle = {i, j, std::numeric_limits<double>::infinity(), std::numeric_limits<double>::infinity()};
-    auto I = close.find(obstacle.id(current_graph.width));
-    if (I != close.end()) {
-        obstacle = I->second;
-        close.erase(obstacle.id(current_graph.width));
-    } else if (existsOpen(obstacle, current_graph.width)) {
-        obstacle = findOpen(obstacle, current_graph.width);
-        removeOpen(obstacle, current_graph.width);
-    }
-    for (Node neighbour : findSuccessors(obstacle, current_graph, options)) {
-        if (neighbour.rhs < std::numeric_limits<double>::infinity() && neighbour.rhs > 0) {
-            Node parent = findParent(neighbour, current_graph, options);
-            neighbour.parent = {parent.i, parent.j};
-            neighbour.rhs = parent.g + MoveCost(parent, neighbour);
-            updateVertex(neighbour, {current_graph.goal_i, current_graph.goal_j}, options, current_graph.width);
+    Node goal = {current_graph.goal_i, current_graph.goal_j};
+    for (Node node : findSuccessors(obstacle, current_graph, options)) {
+        if (node.rhs > 0) {
+            updateRHS(node, current_graph, options);
+            updateVertex(node, goal, options, current_graph.width);
         }
     }
 }
@@ -197,27 +183,28 @@ SearchResult LPA::startSearch(const EnvironmentOptions &options) {
                  std::numeric_limits<double>::infinity()};
     Node start = {current_graph.start_i, current_graph.start_j, 0, 0};
     uint_least64_t number_of_steps = 0;
-    if (open_size == 0) {
+    if (open_size == 0 && close.size() == 0) {
         open = std::vector<std::vector<LPA::open_node>>(current_graph.height, std::vector<LPA::open_node>(current_graph.width));
-        //cluster_minimums.resize(current_graph.height);
         start.key = calculateKey(start, goal, options);
         updateOpen(start, current_graph.width);
     }
     int start_open_size = open_size;
     auto start_time = std::chrono::high_resolution_clock::now();
     Node current_node;
-    std::vector<Node> neighbours;
-    neighbours.reserve(9);
+    current_node.key = {-1, -1};
+
     while (open_size > 0 && (close.find(goal.id(current_graph.width)) == close.end() ||
                              current_node.key < calculateKey(goal, goal, options))) {
+        ++number_of_steps;
         current_node = findMin();
-        std::cout << "Expanding " << current_node.i << ' ' << current_node.j << " g = " << current_node.g << " rhs = " << current_node.rhs << '\n';
-        findSuccessors(current_node, current_graph, options, neighbours);
-        if (current_node.g > current_node.rhs) {
-            current_node.g = current_node.rhs;
+        if (current_node.key < calculateKey(current_node, goal, options)) {
             updateVertex(current_node, goal, options, current_graph.width);
-            for (Node node : neighbours) {
-                if (current_node.g + MoveCost(current_node, node) < node.rhs) {
+        } else if (current_node.g > current_node.rhs) {
+            current_node.g = current_node.rhs;
+            removeOpen(current_node, current_graph.width);
+            updateVertex(current_node, goal, options, current_graph.width);
+            for (Node node : findSuccessors(current_node, current_graph, options)) {
+                if (node.rhs > 0 && node.rhs > current_node.g + MoveCost(current_node, node)) {
                     node.rhs = current_node.g + MoveCost(current_node, node);
                     node.parent = {current_node.i, current_node.j};
                     updateVertex(node, goal, options, current_graph.width);
@@ -225,19 +212,16 @@ SearchResult LPA::startSearch(const EnvironmentOptions &options) {
             }
         } else {
             current_node.g = std::numeric_limits<double>::infinity();
-            neighbours.push_back(current_node);
-            for (Node node : neighbours) {
+            updateVertex(current_node, goal, options, current_graph.width);
+            for (Node node : findSuccessors(current_node, current_graph, options)) {
                 if (node.rhs > 0) {
-                    Node parent = findParent(node, current_graph, options);
-                    node.parent = {parent.i, parent.j};
-                    node.rhs = parent.g + MoveCost(parent, node);
+                    updateRHS(node, current_graph, options);
+                    updateVertex(node, goal, options, current_graph.width);
                 }
-                updateVertex(node, goal, options, current_graph.width);
             }
         }
-        auto I = close.find(goal.id(current_graph.width));
-        if (I != close.end()) {
-            goal = I->second;
+        if (close.find(goal.id(current_graph.width)) != close.end()) {
+            goal = close.find(goal.id(current_graph.width))->second;
         }
     }
     if (goal.g < std::numeric_limits<double>::infinity()) {
@@ -262,13 +246,12 @@ SearchResult LPA::startSearch(const EnvironmentOptions &options) {
     return sresult;
 }
 
-Node LPA::findParent(const Node &node, const Map &map, const EnvironmentOptions &options) const {
-    Node parent;
-    parent.g = std::numeric_limits<double>::infinity();
+void LPA::updateRHS(Node &node, const Map &map, const EnvironmentOptions &options) const {
+    node.rhs = std::numeric_limits<double>::infinity();
     for (Node neighbour : findSuccessors(node, map, options)) {
-        if (neighbour.g + MoveCost(neighbour, node) < parent.g + MoveCost(parent, node)) {
-            parent = neighbour;
+        if (neighbour.g + MoveCost(neighbour, node) <= node.rhs) {
+            node.rhs = neighbour.g + MoveCost(neighbour, node);
+            node.parent = {neighbour.i, neighbour.j};
         }
     }
-    return parent;
 }

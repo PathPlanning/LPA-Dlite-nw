@@ -48,8 +48,7 @@ protected:
 
     double calculateRHS(const Node &node, const Map &map, const EnvironmentOptions &options) const;
 
-    Node findParent(const Node &node, const Map &map, const EnvironmentOptions &options) const;
-
+    void updateRHS(Node &node, const Map &map, const EnvironmentOptions &options) const;
 public:
     LPA(float heuristic_weight, const Map &map);
 
