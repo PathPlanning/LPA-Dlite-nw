@@ -67,7 +67,7 @@ protected:
     SearchResult sresult;
     std::list<Node> lppath, hppath;
     std::unordered_map<uint_least64_t, Node> close;
-    std::vector<std::vector<LPA::open_node>> open;
+    std::vector<open_cluster_t> open;
     std::vector<uint_least64_t> cluster_minimums;
     int open_size;
     float hweight;

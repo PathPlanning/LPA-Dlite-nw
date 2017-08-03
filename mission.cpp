@@ -2,6 +2,7 @@
 #include "LPA.h"
 #include "xmllogger.h"
 #include "gl_const.h"
+#include "astar.h"
 
 Mission::Mission() {
     logger = NULL;
@@ -70,18 +71,23 @@ void printPath(const SearchResult &sr, const Map &map) {
 
 void Mission::startSearch() {
     sr = search->startSearch(options);
-    printPath(sr, search->current_graph);
-    // Obstacle 1
-    for (unsigned j = 1; j <= 10; ++j) {
-        search->pointNewObstacle(3, j, options);
+
+    std::cout << "First path found. Modifying map\n";
+    for (int i = map.height >> 2; i < map.height - (map.height >> 2); ++i) {
+        int j = map.width >> 1;
+        search->pointNewObstacle(i, j, options);
     }
+
+    for (int j = map.width >> 2; j < map.width - (map.width >> 2); ++j) {
+        int i = map.height >> 1;
+        search->pointNewObstacle(i, j, options);
+    }
+
     sr = search->startSearch(options);
     printPath(sr, search->current_graph);
-    for (unsigned i = 1; i <= 6; ++i) {
-        search->pointNewObstacle(i, 5, options);
-    }
-    sr = search->startSearch(options);
-    printPath(sr, search->current_graph);
+
+    ISearch::SearchResult sr_astar = Astar(1).startSearch(logger, search->current_graph, options);
+    sr.astar_pathlength = sr_astar.pathlength;
 }
 
 void Mission::printSearchResultsToConsole() {
@@ -95,11 +101,12 @@ void Mission::printSearchResultsToConsole() {
         std::cout << "pathlength=" << sr.pathlength << std::endl;
         std::cout << "pathlength_scaled=" << sr.pathlength * map.cellSize << std::endl;
     }
+    std::cout << "astar length=" << sr.astar_pathlength << '\n';
     std::cout << "time=" << sr.time << std::endl;
 }
 
 void Mission::saveSearchResultsToLog() {
-    logger->writeToLogSummary(sr.numberofsteps, sr.nodescreated, sr.pathlength, sr.time, map.cellSize);
+    logger->writeToLogSummary(sr.numberofsteps, sr.nodescreated, sr.pathlength, sr.time, sr.astar_pathlength);
     if (sr.pathfound) {
         logger->writeToLogPath(*sr.lppath);
         logger->writeToLogHPpath(*sr.hppath);

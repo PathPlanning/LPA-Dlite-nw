@@ -8,6 +8,7 @@ struct SearchResult
 {
         bool pathfound;
         float pathlength; //if path not found, then pathlength=0
+        float astar_pathlength;
         const std::list<Node> *lppath;
         const std::list<Node> *hppath;
         unsigned int nodescreated; //|OPEN| + |CLOSE| = total number of nodes saved in memory during search process.

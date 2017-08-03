@@ -101,39 +101,48 @@ void LPA::makeSecondaryPath() {
 }
 
 void LPA::updateOpen(Node node, uint_fast32_t map_width) {
-    if (!open[node.i][node.j].is_open) {
+    if (!existsOpen(node, map_width)) {
         ++open_size;
     }
-    open[node.i][node.j].node = node;
-    open[node.i][node.j].is_open = true;
+    open[node.i][node.id(map_width)] = node;
+    if (open[node.i].size() == 1 || node < open[node.i].at(cluster_minimums[node.i])) {
+        cluster_minimums[node.i] = node.id(map_width);
+    }
 }
 
 Node LPA::findMin() const {
     Node minimum;
     minimum.key = {std::numeric_limits<double>::infinity(), std::numeric_limits<double>::infinity()};
     for (size_t i = 0; i < open.size(); ++i) {
-        for (size_t j = 0; j < open[0].size(); ++j) {
-            if (open[i][j].is_open && open[i][j].node < minimum) {
-                minimum = open[i][j].node;
-            }
+        if (!open[i].empty() && open[i].at(cluster_minimums[i]).key < minimum.key) {
+            minimum = open[i].at(cluster_minimums[i]);
         }
     }
     return minimum;
 }
 
 inline int LPA::existsOpen(const Node &node, uint_fast32_t map_width) const {
-    return open[node.i][node.j].is_open;
+    return open[node.i].find(node.id(map_width)) != open[node.i].end();
 }
 
 inline Node LPA::findOpen(const Node &node, uint_fast32_t map_width) const {
-    return open[node.i][node.j].node;
+    return open[node.i].at(node.id(map_width));
 }
 
 void LPA::removeOpen(const Node &node, uint_fast32_t map_width) {
-    if (open[node.i][node.j].is_open) {
+    if (existsOpen(node, map_width)) {
         --open_size;
+        open[node.i].erase(node.id(map_width));
+        if (!open[node.i].empty() && node.id(map_width) == cluster_minimums[node.i]) {
+            LPA::keytype min_key = {std::numeric_limits<double>::infinity(), std::numeric_limits<double>::infinity()};
+            for (auto it = open[node.i].begin(); it != open[node.i].end(); ++it) {
+                if (it->second.key <= min_key) {
+                    cluster_minimums[node.i] = it->first;
+                    min_key = it->second.key;
+                }
+            }
+        }
     }
-    open[node.i][node.j].is_open = false;
 }
 
 void LPA::updateVertex(Node node, const Node &target_node, const EnvironmentOptions &options,
@@ -152,7 +161,7 @@ void LPA::updateVertex(Node node, const Node &target_node, const EnvironmentOpti
 
 inline LPA::keytype
 LPA::calculateKey(const Node &node, const Node &target_node, const EnvironmentOptions &options) const {
-    return {std::min(node.g, node.rhs) + 0 * computeHFromCellToCell(node, target_node, options),
+    return {std::min(node.g, node.rhs) + computeHFromCellToCell(node, target_node, options),
             std::min(node.g, node.rhs)};
 }
 
@@ -184,9 +193,13 @@ SearchResult LPA::startSearch(const EnvironmentOptions &options) {
     Node start = {current_graph.start_i, current_graph.start_j, 0, 0};
     uint_least64_t number_of_steps = 0;
     if (open_size == 0 && close.size() == 0) {
-        open = std::vector<std::vector<LPA::open_node>>(current_graph.height, std::vector<LPA::open_node>(current_graph.width));
+        open = std::vector<LPA::open_cluster_t>(current_graph.height);
+        cluster_minimums.resize(current_graph.height);
         start.key = calculateKey(start, goal, options);
         updateOpen(start, current_graph.width);
+        sresult.time = 0.0;
+        sresult.nodescreated = 0;
+        sresult.numberofsteps = 0;
     }
     int start_open_size = open_size;
     auto start_time = std::chrono::high_resolution_clock::now();
@@ -194,12 +207,10 @@ SearchResult LPA::startSearch(const EnvironmentOptions &options) {
     current_node.key = {-1, -1};
 
     while (open_size > 0 && (close.find(goal.id(current_graph.width)) == close.end() ||
-                             current_node.key < calculateKey(goal, goal, options))) {
+                             current_node.key <= calculateKey(goal, goal, options))) {
         ++number_of_steps;
         current_node = findMin();
-        if (current_node.key < calculateKey(current_node, goal, options)) {
-            updateVertex(current_node, goal, options, current_graph.width);
-        } else if (current_node.g > current_node.rhs) {
+        if (current_node.g > current_node.rhs) {
             current_node.g = current_node.rhs;
             removeOpen(current_node, current_graph.width);
             updateVertex(current_node, goal, options, current_graph.width);
@@ -224,25 +235,27 @@ SearchResult LPA::startSearch(const EnvironmentOptions &options) {
             goal = close.find(goal.id(current_graph.width))->second;
         }
     }
-    if (goal.g < std::numeric_limits<double>::infinity()) {
+    lppath.clear();
+    hppath.clear();
+    if (goal.g < std::numeric_limits<double>::infinity() && goal.g == goal.rhs) {
         sresult.pathfound = true;
         sresult.pathlength = goal.g;
-        lppath.clear();
-        hppath.clear();
         while (goal != start) {
             lppath.push_front(goal);
             goal = close[current_graph.width * goal.parent.first + goal.parent.second];
         }
         lppath.push_front(start);
+    } else {
+        sresult.pathfound = false;
+        sresult.pathlength = 0;
     }
     auto finish_time = std::chrono::high_resolution_clock::now();
-    sresult.time = std::chrono::duration_cast<std::chrono::microseconds>(finish_time - start_time).count();
-    sresult.time /= 1000000;
+    sresult.time += (double)std::chrono::duration_cast<std::chrono::microseconds>(finish_time - start_time).count() / 1000000;
     sresult.lppath = &lppath;
     makeSecondaryPath();
     sresult.hppath = &hppath;
-    sresult.numberofsteps = number_of_steps;
-    sresult.nodescreated = close.size() + (open_size - start_open_size);
+    sresult.numberofsteps += number_of_steps;
+    sresult.nodescreated += close.size() + (open_size - start_open_size);
     return sresult;
 }
 

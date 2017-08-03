@@ -41,4 +41,11 @@ namespace std {
         }
     };
 }
+
+struct AstarNode{
+    unsigned i, j;
+    double g, H, F;
+    AstarNode *parent;
+};
+
 #endif

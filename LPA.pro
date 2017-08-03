@@ -11,24 +11,26 @@ QMAKE_LFLAGS += -static -static-libgcc -static-libstdc++
 SOURCES += \
     tinyxml2.cpp \
     xmllogger.cpp \
-    isearch.cpp \
     mission.cpp \
     map.cpp \
-    list.cpp \
     config.cpp \
-    dsearch.cpp \
-    environmentoptions.cpp
+    environmentoptions.cpp \
+    LPA.cpp \
+    search.cpp \
+    isearch.cpp \
+    astar.cpp
 
 HEADERS += \
     tinyxml2.h \
     node.h \
     gl_const.h \
     xmllogger.h \
-    isearch.h \
     mission.h \
     map.h \
     ilogger.h \
-    list.h \
     config.h \
     searchresult.h \
-    environmentoptions.h
+    environmentoptions.h \
+    LPA.h \
+    isearch.h \
+    astar.h
