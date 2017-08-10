@@ -46,8 +46,6 @@ protected:
 
     void updateVertex(Node node, const Node &target_node, const EnvironmentOptions &options, uint_fast32_t map_width);
 
-    double calculateRHS(const Node &node, const Map &map, const EnvironmentOptions &options) const;
-
     void updateRHS(Node &node, const Map &map, const EnvironmentOptions &options) const;
 public:
     LPA(float heuristic_weight, const Map &map);

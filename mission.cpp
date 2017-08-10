@@ -72,7 +72,6 @@ void printPath(const SearchResult &sr, const Map &map) {
 void Mission::startSearch() {
     sr = search->startSearch(options);
 
-    std::cout << "First path found. Modifying map\n";
     for (int i = map.height >> 2; i < map.height - (map.height >> 2); ++i) {
         int j = map.width >> 1;
         search->pointNewObstacle(i, j, options);
@@ -84,7 +83,6 @@ void Mission::startSearch() {
     }
 
     sr = search->startSearch(options);
-    printPath(sr, search->current_graph);
 
     ISearch::SearchResult sr_astar = Astar(1).startSearch(logger, search->current_graph, options);
     sr.astar_pathlength = sr_astar.pathlength;
