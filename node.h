@@ -5,7 +5,7 @@
 
 struct Node
 {
-    unsigned     i, j;
+    int     i, j;
     double  g, rhs;
     std::pair<unsigned, unsigned> parent;
     std::pair<double, double > key;

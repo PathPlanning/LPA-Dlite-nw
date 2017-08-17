@@ -16,11 +16,9 @@ public:
 
 protected:
     typedef std::pair<double, double> keytype;
-    typedef std::unordered_map<uint_least64_t, Node> open_claster_t;
+    typedef std::unordered_map<uint_least64_t, Node> open_cluster_t;
 
     Node findMin() const;
-
-    void deleteMin(const Node &minimum);
 
     void updateOpen(Node node, uint_fast32_t map_width);
 
@@ -60,12 +58,7 @@ public:
 
     void changeGoal(Node new_goal);
 
-    void makeStep(const EnvironmentOptions &options);
-
     SearchResult goToGoal(const Map &real_map, const EnvironmentOptions &options);
-
-    std::list<Node> constructFoundPath() const;
-
 
 protected:
     struct open_node {
@@ -75,7 +68,7 @@ protected:
     SearchResult sresult;
     std::list<Node> lppath, hppath;
     std::unordered_map<uint_least64_t, Node> close;
-    std::vector<std::vector<open_node>> open;
+    std::vector<open_cluster_t> open;
     std::vector<uint_least64_t> cluster_minimums;
     int open_size;
     uint_least64_t number_of_steps;

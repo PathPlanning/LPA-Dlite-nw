@@ -30,7 +30,7 @@ double DLiteSearch::computeHFromCellToCell(const Node &from, const Node &to, con
             return (sqrt((to.i - from.i) * (to.i - from.i) + (to.j - from.j) * (to.j - from.j)));
         case CN_SP_MT_DIAG:
             return (abs(abs(to.i - from.i) - abs(to.j - from.j)) +
-                    sqrt(2) * (std::min(abs(to.i - from.i), abs(to.j - from.j))));
+                    M_SQRT2 * (std::min(abs(to.i - from.i), abs(to.j - from.j))));
         case CN_SP_MT_MANH:
             return (abs(to.i - from.i) + abs(to.j - from.j));
         case CN_SP_MT_CHEB:
@@ -43,18 +43,21 @@ double DLiteSearch::computeHFromCellToCell(const Node &from, const Node &to, con
 void DLiteSearch::computePath(Node finish_node, const Map &map, const EnvironmentOptions &options) {
     Node current_node;
     current_node.key = {-1, -1};
+    std::vector<Node> neigbours;
+    neigbours.reserve(9);
 
     while (open_size > 0 && (close.find(finish_node.id(explored_graph.width)) == close.end() ||
                              current_node.key < calculateKey(finish_node, finish_node, options))) {
         ++number_of_steps;
         current_node = findMin();
+        findSuccessors(current_node, explored_graph, options, neigbours);
         if (current_node.key < calculateKey(current_node, finish_node, options)) {
             updateVertex(current_node, finish_node, options, explored_graph.width);
         } else if (current_node.g > current_node.rhs) {
             current_node.g = current_node.rhs;
             removeOpen(current_node, explored_graph.width);
             updateVertex(current_node, finish_node, options, explored_graph.width);
-            for (Node node : findSuccessors(current_node, explored_graph, options)) {
+            for (Node node : neigbours) {
                 if (node.rhs > 0 && node.rhs > current_node.g + MoveCost(current_node, node)) {
                     node.rhs = current_node.g + MoveCost(current_node, node);
                     node.parent = {current_node.i, current_node.j};
@@ -64,15 +67,18 @@ void DLiteSearch::computePath(Node finish_node, const Map &map, const Environmen
         } else {
             current_node.g = std::numeric_limits<double>::infinity();
             updateVertex(current_node, finish_node, options, explored_graph.width);
-            for (Node node : findSuccessors(current_node, explored_graph, options)) {
-                    if (node.rhs > 0) {
-                        updateRHS(node, explored_graph, options);
-                        updateVertex(node, finish_node, options, explored_graph.width);
-                    }
+            neigbours.push_back(current_node);
+            for (Node node : neigbours) {
+                if (node.rhs > 0) {
+                    updateRHS(node, explored_graph, options);
+                    updateVertex(node, finish_node, options, explored_graph.width);
+                }
             }
         }
         if (close.find(finish_node.id(explored_graph.width)) != close.end()) {
             finish_node = close.find(finish_node.id(explored_graph.width))->second;
+        } else if (existsOpen(goal, explored_graph.width)) {
+            goal = findOpen(goal, explored_graph.width);
         }
     }
 }
@@ -197,50 +203,57 @@ void DLiteSearch::makeSecondaryPath() {
 }
 
 void DLiteSearch::updateOpen(Node node, uint_fast32_t map_width) {
-    if (!open[node.i][node.j].is_open) {
+    if (!existsOpen(node, map_width)) {
         ++open_size;
     }
-    open[node.i][node.j].is_open = true;
-    open[node.i][node.j].node = node;
+    open[node.i][node.id(map_width)] = node;
+    if (open[node.i].size() == 1 || node < open[node.i].at(cluster_minimums[node.i])) {
+        cluster_minimums[node.i] = node.id(map_width);
+    }
 }
 
 Node DLiteSearch::findMin() const {
     Node minimum;
     minimum.key = {std::numeric_limits<double>::infinity(), std::numeric_limits<double>::infinity()};
     for (size_t i = 0; i < open.size(); ++i) {
-        for (size_t j = 0; j < open[0].size(); ++j) {
-            if (open[i][j].is_open) {
-                minimum = std::min(minimum, open[i][j].node);
-            }
+        if (!open[i].empty() && open[i].at(cluster_minimums[i]).key <= minimum.key) {
+            minimum = open[i].at(cluster_minimums[i]);
         }
     }
     return minimum;
 }
 
-void DLiteSearch::deleteMin(const Node &minimum) {
-    --open_size;
-    open[minimum.i][minimum.j].is_open = false;
-}
-
 inline int DLiteSearch::existsOpen(const Node &node, uint_fast32_t map_width) const {
-    return open[node.i][node.j].is_open;
+    return open[node.i].find(node.id(map_width)) != open[node.i].end();
 }
 
 inline Node DLiteSearch::findOpen(const Node &node, uint_fast32_t map_width) const {
-    return open[node.i][node.j].node;
+    return open[node.i].at(node.id(map_width));
 }
 
 void DLiteSearch::removeOpen(const Node &node, uint_fast32_t map_width) {
-    if (open[node.i][node.j].is_open) {
+    if (existsOpen(node, map_width)) {
         --open_size;
+        open[node.i].erase(node.id(map_width));
+        if (!open[node.i].empty() && node.id(map_width) == cluster_minimums[node.i]) {
+            keytype min_key = {std::numeric_limits<double>::infinity(), std::numeric_limits<double>::infinity()};
+            for (auto it = open[node.i].begin(); it != open[node.i].end(); ++it) {
+                if (it->second.key <= min_key) {
+                    cluster_minimums[node.i] = it->first;
+                    min_key = it->second.key;
+                }
+            }
+        }
     }
-    open[node.i][node.j].is_open = false;
 }
 
 void DLiteSearch::updateVertex(Node &node, const Node &target_node, const EnvironmentOptions &options,
                                uint_fast32_t map_width) {
     node.key = calculateKey(node, target_node, options);
-    if (node.g != node.rhs || node.rhs == std::numeric_limits<double>::infinity()) {
+    if (node.rhs == std::numeric_limits<double>::infinity() && node.g == std::numeric_limits<double>::infinity() &&
+        existsOpen(node, map_width)) {
+        removeOpen(node, map_width);
+    } else if (node.g != node.rhs || node.rhs == std::numeric_limits<double>::infinity()) {
         close.erase(node.id(map_width));
         updateOpen(node, map_width);
     } else {
@@ -301,7 +314,8 @@ int DLiteSearch::exploreGraph(const Node &position, const Map &real_map,
 void DLiteSearch::changeGoal(Node new_goal) {
     key_modifier = 0;
     open_size = 0;
-    open = std::vector<std::vector<open_node>>(explored_graph.height, std::vector<open_node>(explored_graph.width));
+    open = std::vector<DLiteSearch::open_cluster_t>(explored_graph.height);
+    cluster_minimums.resize(explored_graph.height);
     close.clear();
 
     new_goal.g = 0;
@@ -312,17 +326,4 @@ void DLiteSearch::changeGoal(Node new_goal) {
 void DLiteSearch::setStartPosition(const Node &start) {
     position = start;
     prev = start;
-}
-
-void DLiteSearch::makeStep(const EnvironmentOptions &options) {
-    for (Node node : findSuccessors(position, explored_graph, options)) {
-        auto I = close.find(node.id(explored_graph.width));
-        if (I != close.end()) {
-            node = I->second;
-            if (node.g + MoveCost(node, prev) <= position.g + MoveCost(position, prev) || node == goal) {
-                position = node;
-            }
-        }
-    }
-    lppath.push_back(position);
 }
